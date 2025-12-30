@@ -5,7 +5,21 @@ const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
 
-const databaseId = process.env.NOTION_DATABASE_ID!;
+// データベースIDをハイフン付きフォーマットに変換
+function formatDatabaseId(id: string): string {
+  // 既にハイフンが含まれている場合はそのまま返す
+  if (id.includes('-')) {
+    return id;
+  }
+  // ハイフンなしの32文字の場合、UUID形式に変換
+  // 形式: 8-4-4-4-12
+  if (id.length === 32) {
+    return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+  }
+  return id;
+}
+
+const databaseId = formatDatabaseId(process.env.NOTION_DATABASE_ID!);
 
 interface NotionCardData extends CardFormData {
   notionId: string;
@@ -18,27 +32,58 @@ export async function fetchNotionDatabase(): Promise<NotionCardData[]> {
       throw new Error('Notion APIキーまたはデータベースIDが設定されていません');
     }
 
-    const response = await notion.databases.query({
+    // まずデータベース情報を取得してデータソースIDを抽出
+    console.log('Fetching database with ID:', databaseId);
+    const database = await notion.databases.retrieve({
       database_id: databaseId,
     });
+    console.log('Database retrieved:', JSON.stringify(database, null, 2));
+
+    // データベースから最初のデータソースIDを取得
+    if (!('data_sources' in database) || !database.data_sources || database.data_sources.length === 0) {
+      console.error('Database object:', database);
+      throw new Error('データベースにデータソースが見つかりません');
+    }
+
+    const dataSourceId = database.data_sources[0].id;
+    console.log('Using data source ID:', dataSourceId);
+
+    // データソースをクエリ
+    const response = await notion.dataSources.query({
+      data_source_id: dataSourceId,
+    });
+    console.log('Query response:', JSON.stringify(response, null, 2));
 
     const cards: NotionCardData[] = [];
 
     for (const page of response.results) {
       if ('properties' in page) {
         try {
+          // Notionのプロパティ名に合わせてマッピング
+          // title (代表者名) -> name
+          // Company -> companyName
+          // Email -> email
+          // Text -> messageTemplate
           const card: NotionCardData = {
             notionId: page.id,
-            companyName: extractTitle(page.properties),
-            name: extractRichText(page.properties, '名前') || '',
-            email: extractEmail(page.properties, 'メールアドレス') || '',
-            messageTemplate: extractRichText(page.properties, '送信テキスト') || '',
+            companyName: extractRichText(page.properties, 'Company') || '',
+            name: extractTitle(page.properties) || '', // titleフィールド（代表者名）
+            email: extractEmail(page.properties, 'Email') || '',
+            messageTemplate: extractRichText(page.properties, 'Text') || '',
             tags: extractMultiSelect(page.properties, 'タグ'),
           };
+
+          console.log('Parsed card:', card);
 
           // 必須フィールドがすべて存在する場合のみ追加
           if (card.companyName && card.name && card.email) {
             cards.push(card);
+          } else {
+            console.log('Skipping card due to missing fields:', {
+              companyName: card.companyName,
+              name: card.name,
+              email: card.email,
+            });
           }
         } catch (error) {
           console.error('Error parsing Notion page:', error);

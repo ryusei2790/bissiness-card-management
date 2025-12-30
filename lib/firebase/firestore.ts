@@ -181,6 +181,39 @@ export async function getCardByNotionId(notionId: string): Promise<Card | null> 
   }
 }
 
+// メールアドレスで既存の名刺を検索
+export async function getCardByEmail(email: string): Promise<Card | null> {
+  try {
+    const snapshot = await db
+      .collection(COLLECTIONS.CARDS)
+      .where('email', '==', email)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const doc = snapshot.docs[0];
+    const data = doc.data();
+
+    return {
+      id: doc.id,
+      companyName: data.companyName,
+      name: data.name,
+      email: data.email,
+      messageTemplate: data.messageTemplate,
+      notionId: data.notionId,
+      createdAt: data.createdAt.toDate(),
+      updatedAt: data.updatedAt.toDate(),
+      tags: data.tags || [],
+    };
+  } catch (error) {
+    console.error('Error getting card by email:', error);
+    return null;
+  }
+}
+
 // メール送信履歴の保存
 
 export async function saveMailHistory(historyData: Omit<MailHistory, 'id'>): Promise<string> {
