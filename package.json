@@ -13,12 +13,14 @@
     "@opentelemetry/api": "^1.9.0",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
+    "encoding-japanese": "^2.2.0",
     "firebase": "^12.7.0",
     "firebase-admin": "^13.6.0",
     "googleapis": "^169.0.0",
     "next": "16.1.1",
     "next-auth": "^4.24.13",
     "nodemailer": "^7.0.12",
+    "papaparse": "^5.5.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "zod": "^4.2.1"
@@ -26,6 +28,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

@@ -8,6 +8,7 @@ export default function CardsPage() {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -67,6 +68,59 @@ export default function CardsPage() {
     fetchCards(searchQuery);
   };
 
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      setMessage(null);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/cards/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        let messageText = `CSVから${result.createdCount}件インポートしました (スキップ: ${result.skippedCount})`;
+        
+        // エラー詳細がある場合は最初の3件を表示
+        if (result.errors && result.errors.length > 0) {
+          const errorSample = result.errors.slice(0, 3).join('; ');
+          messageText += `\n詳細: ${errorSample}`;
+          if (result.errors.length > 3) {
+            messageText += `... 他${result.errors.length - 3}件`;
+          }
+        }
+        
+        setMessage({
+          type: result.createdCount > 0 ? 'success' : 'error',
+          text: messageText,
+        });
+        fetchCards();
+      } else {
+        setMessage({
+          type: 'error',
+          text: result.error || 'CSVインポートに失敗しました',
+        });
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: 'CSVインポート中にエラーが発生しました',
+      });
+    } finally {
+      setImporting(false);
+      // Reset input value to allow re-importing the same file
+      event.target.value = '';
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`${name}さんの名刺を削除しますか?`)) {
       return;
@@ -92,19 +146,31 @@ export default function CardsPage() {
           <h2 className="text-2xl font-bold text-gray-800">名刺管理</h2>
           <p className="text-gray-600 mt-1">名刺の登録・編集・削除ができます</p>
         </div>
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-        >
-          {syncing ? 'Notion同期中...' : '📥 Notionから同期'}
-        </button>
+        <div className="flex gap-2">
+          <label className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 cursor-pointer transition-colors flex items-center">
+            {importing ? '📤 インポート中...' : '📤 CSVインポート'}
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleImport}
+              disabled={importing}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            {syncing ? 'Notion同期中...' : '📥 Notionから同期'}
+          </button>
+        </div>
       </div>
 
       {/* メッセージ */}
       {message && (
         <div
-          className={`mb-4 p-3 rounded-md ${
+          className={`mb-4 p-3 rounded-md whitespace-pre-wrap ${
             message.type === 'success'
               ? 'bg-green-50 text-green-800 border border-green-200'
               : 'bg-red-50 text-red-800 border border-red-200'
